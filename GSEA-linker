@@ -1,0 +1,77 @@
+gene<-read.table("/sdf/xujiahao/test/test6/GSEA_gene.txt",header = T)
+fc<-strsplit(gene$gene_name,"/")
+fc<-unlist(fc)
+fc<-unique(fc)
+gene<-fc
+input<-list.files("/sdf/xujiahao/test/test6/KMLK2020121101_04/",pattern = 'xls')
+input_name<-unlist(strsplit(input,".anno.xls"))
+
+
+for (kk in input_name) {
+  input<-paste0("/sdf/xujiahao/test/test6/KMLK2020121101_04/",kk,".anno.xls")
+  gene_fc<-read.table(input,check.names = F,header = T,fill = T,quote="",sep = "\t")
+  #gene_fc<-gene_fc[gene_fc$GeneName %in%c(gene),]
+  gene_fc_2<-gene_fc
+  gene_fc<-select(gene_fc,c("GeneName","Log2FoldChange"))
+  colnames(gene_fc)<-c("gene","logFC")
+  gene_fc<-gene_fc[order(gene_fc$logFC,decreasing = T),]
+  geneList = gene_fc[,2]
+  names(geneList) = as.character(gene_fc[,1])
+  
+  make_file<-paste0("mkdir ","/sdf/zhangfy/zfy/",kk)
+  make_file_2<-paste0("/sdf/zhangfy/zfy/",kk)
+  system(make_file)
+  for (n in c("BP","CC","MF")) {
+    Go_gseresult <- gseGO(geneList, 'org.Hs.eg.db', keyType = "SYMBOL", ont=n, nPerm = 1000, 
+                          minGSSize = 3, maxGSSize = 1000, pvalueCutoff=1)
+    rm(i)
+    for (i in c(1:5)) {
+      k<-paste0(make_file_2,"/GO_",n,"_",i,".pdf")
+      pdf(k)
+      
+      a<-gseaplot2(Go_gseresult,i,pvalue_table=T)
+      print(a)
+      dev.off()
+    }
+    
+    GSEA_name<-paste0(make_file_2,"/GO_",n,"_top5.pdf")
+    GSEA_name_file<-paste0(make_file_2,"/GO_",n,".csv")
+    pdf(GSEA_name)
+    a<-gseaplot2(Go_gseresult,1:5,pvalue_table=T)
+    print(a)
+    dev.off()
+    Go_gseresult<-as.data.frame(Go_gseresult)
+    write.csv(Go_gseresult,GSEA_name_file, row.names =T, col.names =TRUE, quote =F)
+    
+  }
+  
+  rm(i)
+  z <- bitr(gene_fc$gene,fromType = "SYMBOL", toType = c("ENTREZID"),OrgDb = "org.Hs.eg.db")
+  colnames(z)<-c("gene","ENTREZID")
+  z<-left_join(z,gene_fc,by = "gene")
+  geneList_1= z[,3]
+  names(geneList_1) = as.character(z[,2])
+  KEGG_gseresult <- gseKEGG(geneList_1, nPerm = 1000, minGSSize = 3, maxGSSize = 1000, pvalueCutoff=1)
+  kegg_name_enrich <- setReadable(KEGG_gseresult, OrgDb="org.Hs.eg.db", keyType='ENTREZID')
+  
+  for (i in c(1:5)) {
+    k<-paste0(make_file_2,"/KEGG_",i,".pdf")
+    pdf(k)
+    a<-gseaplot2(KEGG_gseresult,i,pvalue_table=T)
+    print(a)
+    dev.off()
+    
+  }
+  
+  k<-paste0(make_file_2,"/KEGG_top5.pdf")
+  kk1<-paste0(make_file_2,"/KEGG.csv")
+  kk2<-paste0(make_file_2,"/matrix.csv")
+  pdf(k)
+  a<-gseaplot2(KEGG_gseresult,1:5,pvalue_table=T)
+  print(a)
+  dev.off()
+  
+  kegg_name_enrich<-as.data.frame(kegg_name_enrich)
+  write.csv(kegg_name_enrich,kk1,row.names =T, col.names =TRUE, quote =F)
+  write.csv(gene_fc_2,kk2,row.names =T, col.names =TRUE, quote =F)
+}
